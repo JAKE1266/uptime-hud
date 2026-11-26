@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>uptime-hud</title>
+  <style>
+    :root{
+      --bg:#0a0b0f; --bg2:#12141a; --card:#151821; --card2:#1b1f2a;
+      --line:#252a36; --line2:#323847;
+      --fg:#e8eaf0; --dim:#8b93a7; --dimmer:#5d6478;
+      --accent:#6366f1; --ok:#22c55e; --err:#ef4444; --unknown:#5d6478;
+      --r:14px;
+    }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{
+      background:var(--bg);color:var(--fg);
+      font:14px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+      min-height:100vh;
+    }
+    header{
+      position:sticky;top:0;z-index:50;
+      background:rgba(10,11,15,.85);backdrop-filter:blur(16px);
+      border-bottom:1px solid var(--line);
+      padding:0 28px;height:60px;display:flex;align-items:center;gap:14px;
+    }
+    .logo{font-size:16px;font-weight:700;display:flex;align-items:center;gap:9px}
+    .logo .dot{width:9px;height:9px;border-radius:50%;background:var(--ok);box-shadow:0 0 12px var(--ok)}
+    .sub{font-size:12px;color:var(--dimmer)}
+    .layout{max-width:1100px;margin:0 auto;padding:24px 28px 60px;display:flex;flex-direction:column;gap:18px}
+    .card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:18px}
+    .card-h{font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--dimmer);margin-bottom:14px}
+    .tgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px}
+    .tcard{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;position:relative}
+    .tcard:hover{border-color:var(--line2)}
+    .tcard .del{position:absolute;top:10px;right:10px;background:none;border:0;color:var(--dimmer);cursor:pointer;font-size:14px}
+    .tcard .del:hover{color:var(--err)}
+    .tname{font-weight:700;font-size:14px;display:flex;align-items:center;gap:8px;margin-bottom:2px}
+    .dot{width:10px;height:10px;border-radius:50%;flex:none}
+    .dot.up{background:var(--ok);box-shadow:0 0 10px var(--ok)}
+    .dot.down{background:var(--err);box-shadow:0 0 10px var(--err)}
+    .dot.unknown{background:var(--unknown)}
+    .turl{font-size:11.5px;color:var(--dimmer);word-break:break-all;margin-bottom:10px;font-family:ui-monospace,monospace}
+    .metrics{display:flex;gap:14px;margin:8px 0;font-size:12px;color:var(--dim);flex-wrap:wrap}
+    .metrics b{color:var(--fg);font-variant-numeric:tabular-nums}
+    .metrics .lat b{color:var(--ok)}
+    .metrics .lat.bad b{color:var(--err)}
+    .tl{display:flex;gap:2px;height:26px;margin-top:8px;align-items:flex-end}
+    .tl .seg{flex:1;border-radius:2px;min-width:3px;max-width:14px}
+    .seg.up{background:var(--ok)} .seg.down{background:var(--err)} .seg.none{background:var(--line)}
+    .terr{color:var(--err);font-size:11.5px;margin-top:6px;word-break:break-all}
+    .pct{font-size:12px}
+    .pct.ok{color:var(--ok)} .pct.bad{color:var(--err)} .pct.dim{color:var(--dimmer)}
+    form.add{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+    input{background:var(--bg2);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:9px 12px;font:inherit}
+    input:focus{outline:none;border-color:var(--accent)}
+    input.u{flex:1;min-width:220px}
+    input.n{width:150px} input.i{width:90px}
+    button{font:inherit;font-weight:600;cursor:pointer;border:0;border-radius:8px;padding:9px 16px;background:linear-gradient(135deg,var(--accent),#8b5cf6);color:#fff}
+    .hint{font-size:11.5px;color:var(--dimmer);margin-top:8px;line-height:1.6}
+    .evt{font:11px/1.6 ui-monospace,monospace;color:var(--dimmer);max-height:140px;overflow-y:auto;background:var(--bg2);border-radius:9px;padding:9px 11px}
+    .empty{text-align:center;padding:40px;color:var(--dimmer)}
+  </style>
+</head>
+<body>
+  <header>
+    <div class="logo"><span class="dot" id="liveDot"></span>uptime-hud</div>
+    <span class="sub" id="subInfo">本地站点健康监控</span>
+  </header>
+
+  <div class="layout">
+    <div class="card">
+      <div class="card-h">➕ 添加探测目标</div>
+      <form class="add" id="addForm">
+        <input class="u" id="fUrl" placeholder="URL,如 https://example.com/health" required>
+        <input class="n" id="fName" placeholder="名称(可选)">
+        <input class="i" id="fInterval" type="number" min="1" value="30" title="间隔秒">
+        <button type="submit">添加</button>
+      </form>
+      <div class="hint">保存到 <code>data/targets.json</code>,立即生效。期望状态码可在 targets.json 里配 <code>expectStatus</code>(默认 2xx 算正常)。</div>
+    </div>
+
+    <div>
+      <div class="card-h" style="margin-bottom:10px">探测目标 <span id="tCount"></span></div>
+      <div class="tgrid" id="tGrid"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-h">事件流</div>
+      <div class="evt" id="evtBox"></div>
+    </div>
+  </div>
+
+  <script>
+    const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+    const clock = (ts) => ts ? new Date(ts).toLocaleTimeString('zh-CN', { hour12: false }) : '—'
+    const latencyHtml = (r) => (r.latencyMs == null
+      ? '<span class="lat bad">延迟 <b>—</b></span>'
+      : `<span class="lat ${r.latencyMs > 2000 ? 'bad' : ''}">延迟 <b>${r.latencyMs}ms</b></span>`)
+    const pctHtml = (agg, label) => agg.checks
+      ? `<span class="pct ${agg.uptimePct >= 99 ? 'ok' : agg.uptimePct < 90 ? 'bad' : 'dim'}">${label} <b>${agg.uptimePct}%</b></span>`
+      : `<span class="pct dim">${label} <b>—</b></span>`
+
+    let state = null
+
+    function render() {
+      if (!state) return
+      const grid = document.getElementById('tGrid')
+      document.getElementById('tCount').textContent = `(${state.targets.length})`
+      if (!state.targets.length) {
+        grid.innerHTML = '<div class="empty">还没有探测目标,在上面添加一个</div>'
+        return
+      }
+      grid.innerHTML = state.targets.map((t) => {
+        const recs = state.history[t.id] ?? []
+        const w = state.windows[t.id] ?? {}
+        const lastErr = t.lastError ? `<div class="terr">${esc(t.lastError)}</div>` : ''
+        // 最近 60 次探测的迷你时间轴(旧 → 新)
+        const segs = recs.slice(-60).map((r) =>
+          `<div class="seg ${r.status}" title="${esc(clock(r.ts)} · ${r.status}${r.code ? ' ' + r.code : ''})"></div>`
+        ).join('') || '<div class="seg none" style="width:100%"></div>'
+        return `<div class="tcard">
+          <button class="del" data-del="${esc(t.id)}" title="删除">✕</button>
+          <div class="tname"><span class="dot ${t.status}"></span>${esc(t.name)}</div>
+          <div class="turl">${esc(t.url)} · 每 ${t.intervalSec}s</div>
+          <div class="metrics">
+            ${latencyHtml(t)}
+            ${pctHtml(w.h1 ?? {}, '1h')}
+            ${pctHtml(w.h24 ?? {}, '24h')}
+            <span>探测 <b>${t.checks}</b> 次</span>
+            <span>最近 <b>${clock(t.lastCheckTs)}</b></span>
+          </div>
+          <div class="tl">${segs}</div>
+          ${lastErr}
+        </div>`
+      }).join('')
+      for (const btn of grid.querySelectorAll('[data-del]')) {
+        btn.addEventListener('click', async () => {
+          if (!confirm('删除这个探测目标?')) return
+          await fetch(`/api/targets/${encodeURIComponent(btn.dataset.del)}`, { method: 'DELETE' })
+          refresh()
+        })
+      }
+      document.getElementById('evtBox').innerHTML = (state.events ?? []).map((e) => {
+        const tag = e.kind === 'check' ? (e.status === 'up' ? '✓' : '✗') : (e.type ?? '')
+        const tid = esc(e.targetId ?? '')
+        const info = e.error ? esc(e.error) : (e.code ? `HTTP ${e.code}` : '')
+        return `<div>${clock(e.t)} [${tag}] ${tid} ${info}</div>`
+      }).join('') || '<div>暂无事件</div>'
+    }
+
+    async function refresh() {
+      try {
+        state = await (await fetch('/api/status')).json()
+        const allUp = state.targets.length && state.targets.every((t) => t.status === 'up')
+        document.getElementById('liveDot').style.background = allUp ? 'var(--ok)' : state.targets.some((t) => t.status === 'down') ? 'var(--err)' : 'var(--unknown)'
+        document.getElementById('subInfo').textContent = `${state.targets.length} 个目标 · ${state.now ? new Date(state.now).toLocaleTimeString('zh-CN', { hour12: false }) : ''}`
+        render()
+      } catch {}
+    }
+
+    document.getElementById('addForm').addEventListener('submit', async (ev) => {
+      ev.preventDefault()
+      const body = {
+        url: document.getElementById('fUrl').value.trim(),
+        name: document.getElementById('fName').value.trim(),
+        intervalSec: Number(document.getElementById('fInterval').value) || 30,
+      }
+      if (!body.url) return
+      const res = await fetch('/api/targets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      if (!res.ok) { alert((await res.json()).error ?? '添加失败'); return }
+      document.getElementById('fUrl').value = ''
+      document.getElementById('fName').value = ''
+      refresh()
+    })
+
+    refresh()
+    setInterval(refresh, 3000)
+  </script>
+</body>
+</html>

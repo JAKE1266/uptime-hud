@@ -1,0 +1,8 @@
+# CI / dev-only files (stay in GitHub, not in the npm tarball)
+.github/
+test/
+dbg.log
+dbg2.log
+srv.err
+srv.out
+*.log

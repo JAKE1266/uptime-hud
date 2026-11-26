@@ -1,0 +1,14 @@
+# dependencies
+node_modules/
+# runtime data / logs
+data/
+*.log
+srv.err
+srv.out
+dbg.log
+dbg2.log
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
