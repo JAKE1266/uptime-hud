@@ -1,5 +1,9 @@
 # uptime-hud
 
+[![CI](https://github.com/JAKE1266/uptime-hud/actions/workflows/ci.yml/badge.svg)](https://github.com/JAKE1266/uptime-hud/actions/workflows/ci.yml)
+
+> 源码：<https://github.com/JAKE1266/uptime-hud> · 安装：`npm i github:JAKE1266/uptime-hud`（或直接克隆运行）
+
 零依赖**本地站点健康监控**:定时探测一组 URL,延迟/状态落盘,浏览器仪表盘实时查看可用率、上下线时间轴与事件流。纯 Node.js(≥18),无任何第三方依赖。
 
 ## 快速开始
